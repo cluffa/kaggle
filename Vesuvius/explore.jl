@@ -27,4 +27,5 @@ begin
     ) 
 end
 
-GC.gc()
+
+
