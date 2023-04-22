@@ -214,7 +214,7 @@
 
 # julia version
 
-using Flux
+using Flux, CUDA
 using Images, TiffImages
 using Plots
 
@@ -293,7 +293,7 @@ function Base.length(dataset::SubvolumeDataset)
     return length(dataset.pixels)
 end
 
-model = Chain(
+model = Chain([
     Conv((3, 3), 1=>16, relu),
     MaxPool((2, 2)),
     Conv((3, 3), 16=>32, relu),
@@ -304,10 +304,10 @@ model = Chain(
     Dense(256, 128, relu),
     Dense(128, 1),
     sigmoid
-) |> gpu;
+]) |> gpu;
 
 
-rand(32, 32, 1, 1) |> gpu |> model
+CUDA.rand(32, 32, 1, 1) |> model
 
 
 
