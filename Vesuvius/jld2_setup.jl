@@ -42,6 +42,18 @@ function read_scan!(A, jld_file, scan_num)
     return A
 end
 
+function read_inklabels(jld_file, scan_num)
+    jldopen(jld_file, "r") do f
+        f["$scan_num"]["inklabels.png"]
+    end
+end
+
+function read_mask(jld_file, scan_num)
+    jldopen(jld_file, "r") do f
+        f["$scan_num"]["mask.png"]
+    end
+end
+
 function read_scan(jld_file, scan_num, gpu = true)
     dims = scan_size(jld_file, scan_num)
 
