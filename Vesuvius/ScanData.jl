@@ -6,32 +6,6 @@ using SharedArrays
 using OffsetArrays
 using MLUtils
 
-struct ScanDataObs{T, N, A} <: AbstractArray{T, N}
-    slices::A
-end
-
-function ScanDataObs(slices::Vector{<:AbstractArray})
-    T = mapreduce(eltype, promote_type, slices)
-    N = ndims(first(slices)) == 3 ? 4 : ndims(first(slices))
-    # slices = map(OffsetArrays.no_offset_view, slices)
-    return ScanDataObs{T, N, typeof(slices)}(slices)
-end
-
-Base.size(A::ScanDataObs) = (size(first(A.slices))[1:end-1]..., length(A.slices))
-Base.axes(A::ScanDataObs) = (axes(first(A.slices))[1:end-1]..., Base.OneTo(length(A.slices)))
-
-@inline function Base.getindex(A::ScanDataObs, i::Vararg{Int})
-    # @boundscheck checkbounds(A, i...)
-    idx, idxs = last(i), Base.front(i)
-    return @inbounds A.slices[idx][idxs..., 1]
-end
-
-@inline function Base.setindex!(A::ScanDataObs, x, i::Vararg{Int})
-    # @boundscheck checkbounds(A, i...)
-    idx, idxs = last(i), Base.front(i)
-    @inbounds A.slices[idx][idxs..., 1] = x
-end
-
 function read_scan(train_set, reload = false)
     @assert isdir("train") "train directory not found"
 
@@ -88,103 +62,104 @@ function read_scans(reload = false)
     Dict([i => read_scan(i) for i in 1:3])
 end
 
-struct ScanData
-    scan::AbstractArray{N0f8, 3}
-    mask::Array{Bool, 2}
-    inklabels::Array{Bool, 2}
-    indices::Array{Tuple{Int16, Int16}, 1}
-    buffer::Int
-    function ScanData(i::Int, buffer = 12)
-        data = read_scan(i)
-        extend_rng = (1 - buffer : size(data[:mask], 1) + buffer, 1 - buffer : size(data[:mask], 2) + buffer, 1:65)
-        new(PaddedView(N0f8(0), data[:scan], extend_rng), data[:mask], data[:inklabels], data[:indices], buffer)
+struct PatchedArray{T, N, A} <: AbstractArray{T, N}
+    patches::A # vector of patch views
+
+    # make PatchedArray from  patches
+    function PatchedArray(;patches)
+
+        T = eltype(first(patches))
+        N = ndims(first(patches)) + 1
+        A = typeof(patches)
+
+        return new{T, N, A}(patches)
     end
-end
 
-struct ScanDataGroup
-    data::Tuple{ScanData, ScanData, ScanData}
-    buffer::Int
-    function ScanDataGroup(buffer = 12)
-        new((ScanData(1, buffer), ScanData(2, buffer), ScanData(3, buffer)), buffer)
+    # function PatchedArray(data::Tuple, masks::Tuple, (h, w)::Tuple{Int, Int} = (256, 256), (overlap_h, overlap_w)::Tuple{Int, Int} = (0, 0))
+    #     patched = [PatchedArray(A, M, (h, w), (overlap_h, overlap_w)) for (A, M) in zip(data, masks)]
+    #     patches = vcat([A.patches for A in patched]...)
+    #     return PatchedArray(;patches = patches)
+    # end
+
+    # function PatchedArray(data::Tuple, (h, w)::Tuple{Int, Int} = (256, 256), (overlap_h, overlap_w)::Tuple{Int, Int} = (0, 0))
+    #     patched = [PatchedArray(A, (h, w), (overlap_h, overlap_w)) for A in data]
+    #     patches = vcat([A.patches for A in patched]...)
+    #     return PatchedArray(;patches = patches)
+    # end
+
+    function PatchedArray(data::AbstractArray, (h, w)::Tuple{Int, Int} = (256, 256), (overlap_h, overlap_w)::Tuple{Int, Int} = (0, 0))
+        mask = trues(size(data)[1:2])
+        PatchedArray(data, mask, (h, w), (overlap_h, overlap_w))
     end
-end
 
-MLUtils.numobs(sd::ScanData) = size(sd.indices, 1)
-MLUtils.numobs(sdg::ScanDataGroup) = sum([numobs(i) for i in sdg.data])
+    function PatchedArray(data::AbstractArray, mask::BitArray, (h, w)::Tuple{Int, Int} = (256, 256), (overlap_h, overlap_w)::Tuple{Int, Int} = (0, 0))
+        @assert ndims(data) == 3 "A must be 3D array"
+        @assert h > overlap_h && w > overlap_w "patch size must be greater than overlap size"
 
-function MLUtils.getobs(sd::ScanData, i::Integer)
-    idx = sd.indices[i]
-    @inbounds (ScanDataObs([@view(sd.scan[idx[1] - sd.buffer:idx[1] + sd.buffer, idx[2] - sd.buffer:idx[2] + sd.buffer, :, :])]), sd.inklabels[idx[1], idx[2], :, :])
-end
+        effective_patch_size = (h - overlap_h, w - overlap_w)
 
-function MLUtils.getobs(sd::ScanData, i::AbstractVector)
-    idxs = sd.indices[i]
-    slices = [@view(sd.scan[idx[1] - sd.buffer:idx[1] + sd.buffer, idx[2] - sd.buffer:idx[2] + sd.buffer, :, :]) for idx in idxs]
-    mask = [sd.inklabels[idx[1], idx[2], :] for idx in idxs]
+        res = ceil.(Int, size(data)[1:2] ./ effective_patch_size) .* effective_patch_size
+
+        # TODO possibly pad each incomplete patch instead of padding the whole array
+        data_padded = res != size(data)[1:2] ? PaddedView(0, data, (res[1], res[2], size(data, 3))) : data
+        mask_padded = res != size(data)[1:2] ? PaddedView(false, mask, (res[1], res[2])) : mask
+
+        rows, cols = size(data_padded)
+        patches = AbstractArray{eltype(data_padded), 3}[]
     
-    @inbounds (ScanDataObs(slices), stack(mask; dims = 2))
-end
+        row_step = h - overlap_h
+        col_step = w - overlap_w
+    
+        @inbounds @views for row in 1:row_step:(rows - h + 1)
+            for col in 1:col_step:(cols - w + 1)
 
-function MLUtils.getobs(sdg::ScanDataGroup, i::Integer)
-    if i <= numobs(sdg.data[1])
-        getobs(sdg.data[1], i)
-    elseif i <= numobs(sdg.data[1]) + numobs(sdg.data[2])
-        getobs(sdg.data[2], i - numobs(sdg.data[1]))
-    else
-        getobs(sdg.data[3], i - numobs(sdg.data[1]) - numobs(sdg.data[2]))
+                patch = data_padded[row:(row + h - 1), col:(col + w - 1), :]
+                mask_patch = mask_padded[row:(row + h - 1), col:(col + w - 1)]
+
+                if any(mask_patch)
+                    push!(patches, patch)
+                end
+            end
+        end
+
+        T = eltype(data_padded)
+        N = ndims(data_padded) + 1
+        A = typeof(patches)
+
+        @info "Patching" patch_size=(h, w) overlap_size=(overlap_h, overlap_w) original=size(data) padded=size(data_padded) patches=length(patches) out_size=(size(first(patches))..., length(patches))
+
+        return new{T, N, A}(patches)
     end
 end
 
-function MLUtils.getobs(sdg::ScanDataGroup, i::AbstractVector)
-    first_group = i .<= numobs(sdg.data[1])
-    second_group = (i .<= (numobs(sdg.data[1]) + numobs(sdg.data[2]))) .& (i .> numobs(sdg.data[1]))
-    third_group = i .> (numobs(sdg.data[1]) + numobs(sdg.data[2]))
+Base.size(A::PatchedArray) = (size(first(A.patches))..., length(A.patches))
+Base.axes(A::PatchedArray) = (axes(first(A.patches))..., Base.OneTo(length(A.patches)))
 
-    slices = AbstractArray[]
-    mask = AbstractArray[]
-
-    if any(first_group)
-        x, y = getobs(sdg.data[1], i[first_group])
-
-        append!(slices, x.slices)
-        push!(mask, y)
-    end
-
-    if any(second_group)
-        x, y = getobs(sdg.data[2], i[second_group] .- numobs(sdg.data[1]))
-
-        append!(slices, x.slices)
-        push!(mask, y)
-    end
-
-    if any(third_group)
-        x, y = getobs(sdg.data[3], i[third_group] .- numobs(sdg.data[1]) .- numobs(sdg.data[2]))
-
-        append!(slices, x.slices)
-        push!(mask, y)
-    end
-
-    @inbounds (ScanDataObs(slices), cat(mask..., dims = 2))
+@inline function Base.getindex(A::PatchedArray, i::Vararg{Int})
+    # @boundscheck checkbounds(A, i...)
+    idx, idxs = last(i), Base.front(i)
+    return @inbounds A.patches[idx][idxs...]
 end
 
-### example usage
-
-# data = ScanData(1); # 1, 2, or 3
-data = ScanDataGroup();
-
-numobs(data) # 152_201_833 for grouped data
-
-getobs(data, 1) .|> size # ((25, 25, 65, 1), (1, 1))
-getobs(data, 1:10) .|> size # ((25, 25, 65, 10), (1, 10))
-
-N = 1024*10
-
-dataloader = DataLoader(data, batchsize = N, shuffle = true, partial = false)
-
-@time x, y = first(dataloader);
-
-@showprogress for (x, y) in dataloader
-    sum(x) + sum(y)
+@inline function Base.setindex!(A::PatchedArray, x, i::Vararg{Int})
+    # @boundscheck checkbounds(A, i...)
+    idx, idxs = last(i), Base.front(i)
+    @inbounds A.patches[idx][idxs...] = x
 end
 
-#TODO get rid of PaddedView? and find redundant views
+function concat(arrays)
+    @assert length(arrays) > 0 "arrays must be non-empty"
+    patches = vcat([array.patches for array in arrays]...)
+
+    return PatchedArray(;patches = patches)
+end
+
+data = read_scans()
+
+all = PatchedArray(Tuple(data[i][:scan] for i in 1:3), Tuple(data[i][:mask] for i in 1:3), (256, 256), (64, 64)); all |> size
+
+# using Flux, CUDA
+
+# all = CuArray(all)
+# @view(patched[:, :, 1, 3]) .|> Gray
+
