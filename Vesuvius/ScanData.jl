@@ -9,7 +9,7 @@ using MLUtils
 function read_scan(train_set, reload = false)
     @assert isdir("train") "train directory not found"
 
-    type = N0f8
+    type = Float16
 
     dir = joinpath("train", "$train_set")
     sv_dir = joinpath(dir, "surface_volume")
@@ -75,17 +75,17 @@ struct PatchedArray{T, N, A} <: AbstractArray{T, N}
         return new{T, N, A}(patches)
     end
 
-    # function PatchedArray(data::Tuple, masks::Tuple, (h, w)::Tuple{Int, Int} = (256, 256), (overlap_h, overlap_w)::Tuple{Int, Int} = (0, 0))
-    #     patched = [PatchedArray(A, M, (h, w), (overlap_h, overlap_w)) for (A, M) in zip(data, masks)]
-    #     patches = vcat([A.patches for A in patched]...)
-    #     return PatchedArray(;patches = patches)
-    # end
+    function PatchedArray(data::Tuple, masks::Tuple, (h, w)::Tuple{Int, Int} = (256, 256), (overlap_h, overlap_w)::Tuple{Int, Int} = (0, 0))
+        patched = [PatchedArray(A, M, (h, w), (overlap_h, overlap_w)) for (A, M) in zip(data, masks)]
+        patches = vcat([A.patches for A in patched]...)
+        return PatchedArray(;patches = patches)
+    end
 
-    # function PatchedArray(data::Tuple, (h, w)::Tuple{Int, Int} = (256, 256), (overlap_h, overlap_w)::Tuple{Int, Int} = (0, 0))
-    #     patched = [PatchedArray(A, (h, w), (overlap_h, overlap_w)) for A in data]
-    #     patches = vcat([A.patches for A in patched]...)
-    #     return PatchedArray(;patches = patches)
-    # end
+    function PatchedArray(data::Tuple, (h, w)::Tuple{Int, Int} = (256, 256), (overlap_h, overlap_w)::Tuple{Int, Int} = (0, 0))
+        patched = [PatchedArray(A, (h, w), (overlap_h, overlap_w)) for A in data]
+        patches = vcat([A.patches for A in patched]...)
+        return PatchedArray(;patches = patches)
+    end
 
     function PatchedArray(data::AbstractArray, (h, w)::Tuple{Int, Int} = (256, 256), (overlap_h, overlap_w)::Tuple{Int, Int} = (0, 0))
         mask = trues(size(data)[1:2])
@@ -93,7 +93,11 @@ struct PatchedArray{T, N, A} <: AbstractArray{T, N}
     end
 
     function PatchedArray(data::AbstractArray, mask::BitArray, (h, w)::Tuple{Int, Int} = (256, 256), (overlap_h, overlap_w)::Tuple{Int, Int} = (0, 0))
-        @assert ndims(data) == 3 "A must be 3D array"
+        if ndims(data) == 2
+            data = reshape(data, size(data)..., 1)
+        end
+
+        @assert ndims(data) == 3 "A must be a 2D or 3D array"
         @assert h > overlap_h && w > overlap_w "patch size must be greater than overlap size"
 
         effective_patch_size = (h - overlap_h, w - overlap_w)
@@ -154,12 +158,16 @@ function concat(arrays)
     return PatchedArray(;patches = patches)
 end
 
-data = read_scans()
+# data = read_scans();
+# scans = (data[1][:scan], data[2][:scan], data[3][:scan]);
+# masks = (data[1][:mask], data[2][:mask], data[3][:mask]);
 
-all = PatchedArray(Tuple(data[i][:scan] for i in 1:3), Tuple(data[i][:mask] for i in 1:3), (256, 256), (64, 64)); all |> size
+# scan_patched = PatchedArray(scans, masks, (256, 256), (0, 0)); scan_patched |> size
+# mask_patched = PatchedArray(masks, masks, (256, 256), (0, 0)); mask_patched |> size
 
 # using Flux, CUDA
 
 # all = CuArray(all)
 # @view(patched[:, :, 1, 3]) .|> Gray
 
+nothing
