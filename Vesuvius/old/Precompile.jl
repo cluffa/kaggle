@@ -21,22 +21,22 @@ optim = Flux.setup(Flux.Adam(1e-8), model);
 
 dataloader = Flux.DataLoader((scan_patched, mask_patched), batchsize = 4, shuffle = true, partial = true, parallel = true);
 
-# let batch = first(dataloader)
-#     x, y = batch .|> gpu
+let batch = first(dataloader)
+    x, y = batch .|> gpu
 
-#     loss, grads = Flux.withgradient(model) do m
-#         ŷ = m(x)
-#         Flux.binarycrossentropy(ŷ, y; agg = mean)
-#     end
+    loss, grads = Flux.withgradient(model) do m
+        ŷ = m(x)
+        Flux.binarycrossentropy(ŷ, y; agg = mean)
+    end
 
-#     Flux.update!(optim, model, grads[1]);
+    Flux.update!(optim, model, grads[1]);
 
-#     batch = nothing
-#     x = nothing
-#     y = nothing
-#     loss = nothing
-#     grads = nothing
-# end
+    batch = nothing
+    x = nothing
+    y = nothing
+    loss = nothing
+    grads = nothing
+end
 
 data = nothing
 scans = nothing

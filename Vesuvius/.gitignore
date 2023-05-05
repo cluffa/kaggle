@@ -1,3 +1,4 @@
 *.dat
 *.jld
 *.jld2
+*.bson

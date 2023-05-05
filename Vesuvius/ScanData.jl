@@ -27,6 +27,8 @@ function read_scan(train_set, reload = false)
         mask = file["mask"]
         inklabels = file["inklabels"]
         indices = file["indices"]
+        # scan = file["scan"]
+
         vert, horz = size(mask)
 
         close(file)
@@ -40,18 +42,26 @@ function read_scan(train_set, reload = false)
         indices = [Int16.((i, j)) for i in axes(mask, 1) for j in axes(mask, 2) if mask[i, j] == 1]
 
         vert, horz = size(mask)
+
+        # round up to nearest multiple of 256
+        vert = vert % 256 == 0 ? vert : vert + (256 - vert % 256)
+        horz = horz % 256 == 0 ? horz : horz + (256 - horz % 256)
         
         scan = SharedArray{type}(abspath(scan_dat), (vert, horz, 65));
+        # scan = Array{type}(undef, (vert, horz, 65));
+        scan .= 0
+        
+        files = readdir(sv_dir, join = true)
+        @showprogress "Loading Tiff Files" for (i, file) in enumerate(files)
+            img = load(file) .|> type
+            scan[1:size(img, 1), 1:size(img, 2), i] = img
+        end
 
         jldopen(data_jld2, "w") do file
+            # file["scan"] = scan
             file["mask"] = mask
             file["inklabels"] = inklabels
             file["indices"] = indices
-        end
-
-        files = readdir(sv_dir, join = true)
-        @showprogress "Loading Tiff Files" for (i, file) in enumerate(files)
-            scan[:, :, i] = load(file) .|> type
         end
 
         return Dict(:scan => scan, :mask => mask, :inklabels => inklabels, :indices => indices)
@@ -59,7 +69,11 @@ function read_scan(train_set, reload = false)
 end
 
 function read_scans(reload = false)
-    Dict([i => read_scan(i) for i in 1:3])
+    d = Dict{Int, Dict}()
+    for i in 1:3
+        d[i] = read_scan(i, reload)
+    end
+    return d
 end
 
 struct PatchedArray{T, N, A} <: AbstractArray{T, N}
@@ -170,4 +184,77 @@ end
 # all = CuArray(all)
 # @view(patched[:, :, 1, 3]) .|> Gray
 
-nothing
+
+struct Scans
+    scans::Tuple
+    inklabels::Tuple
+    masks::Tuple
+
+    function Scans(train_dir = "train")
+        files_1 = readdir("$train_dir/1/surface_volume", join = true);
+        files_2 = readdir("$train_dir/2/surface_volume", join = true);
+        files_3 = readdir("$train_dir/3/surface_volume", join = true);
+
+        new(
+            (
+                load.(files_1; lazyio = true),
+                load.(files_2; lazyio = true),
+                load.(files_3; lazyio = true),
+            ),
+            (
+                load("$train_dir/1/inklabels.png") .|> Gray |> channelview .> 0.5,
+                load("$train_dir/2/inklabels.png") .|> Gray |> channelview .> 0.5,
+                load("$train_dir/3/inklabels.png") .|> Gray |> channelview .> 0.5,
+            ),
+            (
+                load("$train_dir/1/mask.png") .|> Gray |> channelview .> 0.5,
+                load("$train_dir/2/mask.png") .|> Gray |> channelview .> 0.5,
+                load("$train_dir/3/mask.png") .|> Gray |> channelview .> 0.5,
+            )
+        )
+    end
+end;
+
+struct ScanIndices
+    scan::Int64
+    rows::UnitRange{Int64}
+    cols::UnitRange{Int64}
+
+    function ScanIndices(scan, rows, cols)
+        return new(scan, rows, cols)
+    end
+end
+
+struct PatchIndices
+    indices::Vector{ScanIndices}
+
+    function PatchIndices(scans::Scans, res = 256, overlap = 0)
+        indices = ScanIndices[] # (scan, rows, cols)
+    
+        for (s, mask) in enumerate(scans.masks)
+            rows, cols = size(mask)
+            for row in 1:res:(rows - res + 1)
+                for col in 1:res:(cols - res + 1)
+                    if any(mask[row:(row + res - 1), col:(col + res - 1)])
+                        push!(indices, ScanIndices(s, row:(row + res - 1), col:(col + res - 1)))
+                    end
+                end
+            end
+        end
+    
+        return new(indices)
+    end
+end
+
+Base.getindex(patches::PatchIndices, i::Int) = patches.indices[i]
+Base.length(patches::PatchIndices) = length(patches.indices)
+
+function Base.getindex(scans::Scans, scanindices::ScanIndices)
+    scan, rows, cols = scanindices.scan, scanindices.rows, scanindices.cols
+    return stack([s[rows, cols] for s in scans.scans[scan]]), scans.inklabels[scan][rows, cols]
+end
+
+scans = Scans();
+patch_indices = PatchIndices(scans, 256, 0)
+
+scans[patch_indices[4]] .|> size
