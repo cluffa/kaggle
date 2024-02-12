@@ -12,6 +12,8 @@ else
     data_path = args[1]
 end
 
+@show data_path
+
 begin
     # Load the data
     local train_basetable = DataFrame(read_parquet(data_path * "parquet_files/train/train_base.parquet"))
