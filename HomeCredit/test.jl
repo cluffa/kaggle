@@ -165,3 +165,14 @@ begin
     @show size(X_test)
 end;
 
+DecisionTreeClassifier = @load DecisionTreeClassifier pkg = "DecisionTree"
+
+model = DecisionTreeClassifier()
+
+mach = machine(model, X_train, y_train)
+
+MLJ.fit!(mach, verbosity=1, force=true)
+
+cv=CV(nfolds=3)
+
+@show evaluate!(mach; measure=auc, verbosity=2, check_measure=false)
