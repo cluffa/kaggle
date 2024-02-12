@@ -1,11 +1,8 @@
-using Revise
 using Parquet, DataFrames
 using MLJ, MLJModels
-using CategoricalArrays
 using Random
 using Statistics
-using Printf
-using Tidier
+using TidierData
 
 begin
     # Load the data
