@@ -1,3 +1,8 @@
 Vesuvius/train
 Vesuvius/test
 *.zip
+*.parquet
+.vscode
+Manifest.toml
+.DS_Store
+Data/
