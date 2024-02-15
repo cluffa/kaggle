@@ -16,28 +16,28 @@ end
 
 begin
     # Load the data
-    local train_basetable = DataFrame(read_parquet(data_path * "parquet_files/train/train_base.parquet"))
+    local train_basetable = DataFrame(read_parquet(joinpath(data_path, "parquet_files/train/train_base.parquet")))
     local train_static = vcat(
-        DataFrame(read_parquet(data_path * "parquet_files/train/train_static_0_0.parquet")),
-        DataFrame(read_parquet(data_path * "parquet_files/train/train_static_0_1.parquet"))
+        DataFrame(read_parquet(joinpath(data_path, "parquet_files/train/train_static_0_0.parquet"))),
+        DataFrame(read_parquet(joinpath(data_path, "parquet_files/train/train_static_0_1.parquet")))
     )
 
-    local train_static_cb = DataFrame(read_parquet(data_path * "parquet_files/train/train_static_cb_0.parquet"))
-    local train_person_1 = DataFrame(read_parquet(data_path * "parquet_files/train/train_person_1.parquet"))
+    local train_static_cb = DataFrame(read_parquet(joinpath(data_path, "parquet_files/train/train_static_cb_0.parquet")))
+    local train_person_1 = DataFrame(read_parquet(joinpath(data_path, "parquet_files/train/train_person_1.parquet")))
 
-    local train_credit_bureau_b_2 = DataFrame(read_parquet(data_path * "parquet_files/train/train_credit_bureau_b_2.parquet"))
+    local train_credit_bureau_b_2 = DataFrame(read_parquet(joinpath(data_path, "parquet_files/train/train_credit_bureau_b_2.parquet")))
 
-    local test_basetable = DataFrame(read_parquet(data_path * "parquet_files/test/test_base.parquet"))
+    local test_basetable = DataFrame(read_parquet(joinpath(data_path, "parquet_files/test/test_base.parquet")))
     local test_static = vcat(
-        DataFrame(read_parquet(data_path * "parquet_files/test/test_static_0_0.parquet")),
-        DataFrame(read_parquet(data_path * "parquet_files/test/test_static_0_1.parquet")),
-        DataFrame(read_parquet(data_path * "parquet_files/test/test_static_0_2.parquet"))
+        DataFrame(read_parquet(joinpath(data_path, "parquet_files/test/test_static_0_0.parquet"))),
+        DataFrame(read_parquet(joinpath(data_path, "parquet_files/test/test_static_0_1.parquet"))),
+        DataFrame(read_parquet(joinpath(data_path, "parquet_files/test/test_static_0_2.parquet")))
     )
 
-    local test_static_cb = DataFrame(read_parquet(data_path * "parquet_files/test/test_static_cb_0.parquet"))
-    local test_person_1 = DataFrame(read_parquet(data_path * "parquet_files/test/test_person_1.parquet"))
+    local test_static_cb = DataFrame(read_parquet(joinpath(data_path, "parquet_files/test/test_static_cb_0.parquet")))
+    local test_person_1 = DataFrame(read_parquet(joinpath(data_path, "parquet_files/test/test_person_1.parquet")))
 
-    local test_credit_bureau_b_2 = DataFrame(read_parquet(data_path * "parquet_files/test/test_credit_bureau_b_2.parquet"))
+    local test_credit_bureau_b_2 = DataFrame(read_parquet(joinpath(data_path, "parquet_files/test/test_credit_bureau_b_2.parquet")))
 
     # Feature engineering
     local train_person_1_feats_1 = combine(
