@@ -27,8 +27,7 @@ train_df[!, :Y] = map(x -> levels[x], train_df[!, :NObeyesdad])
 
 @glimpse(train_df)
 
-# all except CALC
-ols = lm(@formula(Y ~ Gender + Age + Height + Weight + family_history_with_overweight + FAVC + FCVC + NCP + CAEC + SMOKE + CH2O + SCC + FAF + TUE + MTRANS), train_df)
+ols = lm(@formula(Y ~ Gender + Age + Height + Weight + family_history_with_overweight + FAVC + NCP + CAEC + SMOKE + SCC + FAF + MTRANS), train_df)
 
 test_df.NObeyesdad = clamp.(Int.(round.(predict(ols, test_df))), -1, 5) .|> x -> levels[x]
 
