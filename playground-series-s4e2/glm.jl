@@ -1,6 +1,6 @@
 using CSV: read, write
 using DataFrames
-using TidierData
+using Tidier
 using GLM
 
 test_df = read("test.csv", DataFrame);
