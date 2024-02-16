@@ -65,15 +65,8 @@ begin
 end;
 
 # ╔═╡ e6954342-ef72-45ab-9072-c2e28226cd1e
-begin
-	base_trans = (catf |> ohe) + (numf |> pca) + (numf |> ica)
-	base_models = [
-		base_trans |> gb, 
-		base_trans |> ada, 
-		base_trans |> vote
-	]
-	model = reduce(+, base_models) |> gb
-end 
+model = ((catf |> ohe) + (numf |> pca) + (numf |> rb) |> jrf) +
+	((catf |> ohe) + (numf |> pca) |> gb) + (numf |> rb) |> ohe |> vote
 
 # ╔═╡ ac428a40-5a54-49fc-8a95-771923639da6
 feats = [
@@ -122,7 +115,7 @@ sc = score(:accuracy, pred, Y)
 println(sc)
 
 # ╔═╡ 5e160a93-be9c-4259-b5ac-aecff77382c8
-crossvalidate(model, X, Y, "accuracy_score"; folds = 3)
+crossvalidate(model, X, Y, "accuracy_score", 3)
 
 # ╔═╡ 0e0ad8af-3769-4130-aff7-3982eb5c17df
 X_test = select(test_df, feats) |> feat_eng;
