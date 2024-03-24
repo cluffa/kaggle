@@ -65,8 +65,7 @@ begin
 end;
 
 # ╔═╡ e6954342-ef72-45ab-9072-c2e28226cd1e
-model = ((catf |> ohe) + (numf |> pca) + (numf |> rb) |> jrf) +
-	((catf |> ohe) + (numf |> pca) |> gb) + (numf |> rb) |> ohe |> vote
+model = @pipeline ((catf |> ohe) + (numf |> pca) + (numf |> rb) |> gb)
 
 # ╔═╡ ac428a40-5a54-49fc-8a95-771923639da6
 feats = [
